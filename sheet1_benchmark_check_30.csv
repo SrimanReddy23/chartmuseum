@@ -1,0 +1,758 @@
+row,instance_id,source,project,jira_url,fix_commit_url,title_masked,description_masked_excerpt,log_excerpt,gt_methods,gt_code_excerpt,gt_diff_url,plausible(Y/N),Q1_genuine_bug_fix(Y/N/?),Q2_gt_methods_are_root_cause(Y/Partial/N),Q3_logs_relevant_to_bug(Y/N),Q4_leak_remaining(Y/N),Q5_masking_removed_needed_symptom_info(Y/N),Q6_any_gt_method_is_where_the_error_or_log_line_was_emitted(Y/N/?),comments
+1,AMQ-5743,pathidea,AMQ,https://issues.apache.org/jira/browse/AMQ-5743,https://github.com/apache/activemq/commit/23ecbe80d0f775c85a3a4291dcd4c4ca74d02914,purged of 0 messages | org.apache.activemq.broker.region.Queue logged when clearing a temp queue,"since upgrading to 5.11 I'm getting a lot of these in the logs
+
+2015-03-10 09:50:36,212 | INFO  | temp-queue://ID:STATS2-37496-1425976359943-3:1604:1 purged of 0 messages | org.apache.activemq.broker.region.Queue | ActiveMQ Transport: ssl:///213.198.74.90:36525
+
+According to Garry Tully this is an oversight, quote from the users mailing list
+
+""that is an oversight, when purge is called from a jmx op, we want to
+log the event, but it is also called to clear a temp queue when the
+temp queue is deleted and that should not generate a log message. I
+think that is your case.
+Can you open a jira to track this so that others will see the
+resolution. thanks""","2015-03-10 09:50:36,212 | INFO  | temp-queue://ID:STATS2-37496-1425976359943-3:1604:1 purged of 0 messages | org.apache.activemq.broker.region.Queue | ActiveMQ Transport: ssl:///213.198.74.90:36525",activemq-broker/src/main/java/org/apache/activemq/broker/jmx/QueueView.java::QueueView.purge();activemq-broker/src/main/java/org/apache/activemq/broker/region/Queue.java::Queue.purge(),"public void purge() throws Exception {
+        ((Queue)destination).purge();
+    }",https://github.com/apache/activemq/commit/23ecbe80d0f775c85a3a4291dcd4c4ca74d02914,,,,,,,,
+2,AMQ-4092,pathidea,AMQ,https://issues.apache.org/jira/browse/AMQ-4092,https://github.com/apache/activemq/commit/dd91e8592e6890a8863884250c7fe5ed1d8a85d7,ConcurrentModificationException when using message groups,"seeing these WARN messages frequently while consuming (maxConcurrentConsumers=5) from a queue with the message groups header (JMSXGroupID) set.  If I disable the message groups header, these errors go away...  
+
+That said, I don't see any specific errors with my application (at this point), just these messages in my logs.
+
+2012-10-04 02:34:02,552 |  WARN - Service              - | Async error occurred: java.util.concurrent.ExecutionException: java.util.ConcurrentModificationException
+java.util.concurrent.ExecutionException: java.util.ConcurrentModificationException
+	at java.util.concurrent.FutureTask$Sync.innerGet(FutureTask.java:222)
+	at java.util.concurrent.FutureTask.get(FutureTask.java:83)
+	at org.apache.activemq.broker.region.Queue.doMessageSend(Queue.java:785)
+	at org.apache.activemq","2012-10-04 02:34:02,552 |  WARN - Service              - | Async error occurred: java.util.concurrent.ExecutionException: java.util.ConcurrentModificationException
+java.util.concurrent.ExecutionException: java.util.ConcurrentModificationException
+at java.util.concurrent.FutureTask$Sync.innerGet(FutureTask.java:222)
+at java.util.concurrent.FutureTask.get(FutureTask.java:83)
+at org.apache.activemq.broker.region.Queue.doMessageSend(Queue.java:785)","activemq-broker/src/main/java/org/apache/activemq/broker/region/Queue.java::Queue.assignGroup(Subscription,MessageGroupMap,MessageReference,String);activemq-broker/src/main/java/org/apache/activemq/broker/region/QueueSubscription.java::QueueSubscription.assignGroupToMe(MessageGroupMap,MessageReference,String);activemq-client/src/main/java/org/apache/activemq/command/Message.java::Message.copy(Message);activemq-client/src/main/java/org/apache/activemq/filter/PropertyExpression.java::PropertyExpression.<clinit>();activemq-client/src/main/java/org/apache/activemq/openwire/v10/MessageMarshaller.java::MessageMarshaller.looseMarshal(OpenWireFormat,Object,DataOutput);activemq-client/src/main/java/org/apache/activemq/openwire/v10/MessageMarshaller.java::MessageMarshaller.looseUnmarshal(OpenWireFormat,Object,DataInput);activemq-client/src/main/java/org/apache/activemq/openwire/v10/MessageMarshaller.java::MessageMarshaller.tightMarshal1(OpenWireFormat,Object,BooleanStream);activemq-client/src/main/java/org/apache/activemq/openwire/v10/MessageMarshaller.java::MessageMarshaller.tightMarshal2(OpenWireFormat,Object,DataOutput,BooleanStream);activemq-client/src/main/java/org/apache/activemq/openwire/v10/MessageMarshaller.java::MessageMarshaller.tightUnmarshal(OpenWireFormat,Object,DataInput,BooleanStream)","protected void assignGroup(Subscription subs, MessageGroupMap messageGroupOwners, MessageReference n, String groupId) throws IOException {
+        messageGroupOwners.put(groupId, subs.getConsumerInfo().getConsumerId());
+        Message message = n.getMessage();
+        if (message instanceof ActiveMQMessage) {
+            ActiveMQMessage activeMessage = (ActiveMQMessage) message;
+            try {
+                activeMessage.setBooleanProperty(""JMSXGroupFirstForConsumer"", true, false);
+            } catch (JMSException e) {
+                LOG.warn(""Failed to set boolean header"", e);
+            }
+        }
+        subs.getConsumerInfo().setLastDeliveredSequenceId(subs.getConsumerInfo().getLastDeliveredSequenceId() + 1);
+...",https://github.com/apache/activemq/commit/dd91e8592e6890a8863884250c7fe5ed1d8a85d7,,,,,,,,
+3,HADOOP-4742,pathidea,HADOOP,https://issues.apache.org/jira/browse/HADOOP-4742,https://github.com/apache/hadoop/commit/636b674312ee31061e6f0e19d737d99b1315bfc1,Mistake delete replica in hadoop 0.18.1,"We recently deployed a 0.18.1 cluster and did some test. And we found
+if we corrupt a block, the namenode will find it and replicate it as soon as
+a client read that block. However, the namenode will delete a health block
+(the source of the above replication operation) at the same time, (I think this
+issue may affect all 0.18 tree.)
+
+Having did some trace, I find in FSNamesystem.addStoredBlock(), it will
+check the number of replications after add the block to blocksMap:
+
+ |   NumberReplicas num = countNodes(storedBlock);
+ |    int numLiveReplicas = num.liveReplicas();
+ |    int numCurrentReplica = numLiveReplicas
+ |      + pendingReplications.getNumReplicas(block);
+
+which means all the live replicas and pending replications will be
+counted. But in the end of FSNamesystem.[MASKED_METHOD], w","2008-11-28 11:22:08,866 INFO org.apache.hadoop.dfs.StateChange: *DIR*
+2008-11-28 11:22:08,866 INFO org.apache.hadoop.dfs.StateChange: BLOCK
+2008-11-28 11:22:10,179 INFO org.apache.hadoop.dfs.StateChange: BLOCK*
+2008-11-28 11:22:12,629 INFO org.apache.hadoop.dfs.StateChange: BLOCK*
+2008-11-28 11:22:12,629 INFO org.apache.hadoop.dfs.StateChange: Wang","src/hdfs/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.blockReceived(DatanodeID,Block,String)","public synchronized void blockReceived(DatanodeID nodeID,  
+                                         Block block,
+                                         String delHint
+                                         ) throws IOException {
+    DatanodeDescriptor node = getDatanode(nodeID);
+    if (node == null) {
+      NameNode.stateChangeLog.warn(""BLOCK* NameSystem.blockReceived: ""
+                                   + block + "" is received from an unrecorded node "" 
+                                   + nodeID.getName());
+      throw new IllegalArgumentException(
+                                         ""Unexpected exception.  Got blockReceived message from node "" 
+                                         + block + "", but there is no info for it"");
+...",https://github.com/apache/hadoop/commit/636b674312ee31061e6f0e19d737d99b1315bfc1,,,,,,,,
+4,HADOOP-4530,pathidea,HADOOP,https://issues.apache.org/jira/browse/HADOOP-4530,https://github.com/apache/hadoop/commit/7384222464f9b09ad790091e7f64a4a8c492ae11,"In fsck, HttpServletResponse sendError fails with IllegalStateException","When looking at HADOOP-4526, I tried using sendError at line:53.
+
+{code:title=FsckServlet.java|borderStyle=solid}
+                                _
+     49     } catch (IOException ie) {
+     50       StringUtils.stringifyException(ie);
+     51       LOG.warn(ie);
+     52       String errMsg = ""Fsck on path "" + pmap.get(""path"") + "" failed."";
+     53       response.sendError(HttpServletResponse.SC_GONE, errMsg);
+     54       throw ie;
+     55     }
+{code}
+
+However, it always failed with 
+{noformat}
+2008-10-27 22:39:07,359 WARN /: /fsck?path=%2Fuser:
+java.lang.IllegalStateException: Committed
+  at org.mortbay.jetty.servlet.ServletHttpResponse.resetBuffer(ServletHttpResponse.java:212)
+  at org.mortbay.jetty.servlet.ServletHttpResponse.sendError(ServletHttpResponse.java:375)
+  at org.apache.h","2008-10-27 22:39:07,359 WARN /: /fsck?path=%2Fuser:
+java.lang.IllegalStateException: Committed
+at org.mortbay.jetty.servlet.ServletHttpResponse.resetBuffer(ServletHttpResponse.java:212)
+at org.mortbay.jetty.servlet.ServletHttpResponse.sendError(ServletHttpResponse.java:375)
+at org.apache.hadoop.dfs.FsckServlet.doGet(FsckServlet.java:54)","src/hdfs/org/apache/hadoop/hdfs/server/namenode/FsckServlet.java::FsckServlet.doGet(HttpServletRequest,HttpServletResponse);src/hdfs/org/apache/hadoop/hdfs/server/namenode/NamenodeFsck.java::NamenodeFsck.fsck();src/hdfs/org/apache/hadoop/hdfs/tools/DFSck.java::DFSck.run(String[])","@SuppressWarnings(""unchecked"")
+  public void doGet(HttpServletRequest request,
+                    HttpServletResponse response
+                    ) throws ServletException, IOException {
+    Map<String,String[]> pmap = request.getParameterMap();
+    try {
+      ServletContext context = getServletContext();
+      NameNode nn = (NameNode) context.getAttribute(""name.node"");
+      Configuration conf = (Configuration) context.getAttribute(""name.conf"");
+      NamenodeFsck fscker = new NamenodeFsck(conf, nn, pmap, response);
+      fscker.fsck();
+    } catch (IOException ie) {
+...",https://github.com/apache/hadoop/commit/7384222464f9b09ad790091e7f64a4a8c492ae11,,,,,,,,
+5,HADOOP-10823,pathidea,HADOOP,https://issues.apache.org/jira/browse/HADOOP-10823,https://github.com/apache/hadoop/commit/625585950a15461eb032e5e7ed8fdf4e1113b2bb,TestReloadingX509TrustManager is flaky,"Pasting the log
+{quote}
+Error Message
+
+expected:<2> but was:<1>
+Stacktrace
+
+junit.framework.AssertionFailedError: expected:<2> but was:<1>
+	at junit.framework.Assert.fail(Assert.java:50)
+	at junit.framework.Assert.failNotEquals(Assert.java:287)
+	at junit.framework.Assert.assertEquals(Assert.java:67)
+	at junit.framework.Assert.assertEquals(Assert.java:199)
+	at junit.framework.Assert.assertEquals(Assert.java:205)
+	at org.apache.hadoop.security.ssl.TestReloadingX509TrustManager.testReload(TestReloadingX509TrustManager.java:112)
+Standard Output
+
+2014-07-06 06:12:21,170 WARN  ssl.ReloadingX509TrustManager (ReloadingX509TrustManager.java:run(197)) - Could not load truststore (keep using existing one) : java.io.EOFException
+java.io.EOFException
+	at java.io.DataInputStream.readInt(DataInputStream.","junit.framework.AssertionFailedError: expected:<2> but was:<1>
+at junit.framework.Assert.fail(Assert.java:50)
+at junit.framework.Assert.failNotEquals(Assert.java:287)
+at junit.framework.Assert.assertEquals(Assert.java:67)
+at junit.framework.Assert.assertEquals(Assert.java:199)",hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/security/ssl/ReloadingX509TrustManager.java::ReloadingX509TrustManager.run(),"@Override
+  public void run() {
+    while (running) {
+      try {
+        Thread.sleep(reloadInterval);
+      } catch (InterruptedException e) {
+        //NOP
+      }
+      if (running && needsReload()) {
+        try {
+          trustManagerRef.set(loadTrustManager());
+        } catch (Exception ex) {
+...",https://github.com/apache/hadoop/commit/625585950a15461eb032e5e7ed8fdf4e1113b2bb,,,,,,,,
+6,HDFS-11363,pathidea,HDFS,https://issues.apache.org/jira/browse/HDFS-11363,https://github.com/apache/hadoop/commit/0914fcca312b5e9d20bcf1b6633bc13c9034ba46,Need more diagnosis info when seeing Slow [MASKED_METHOD],"When client writes a file, it may get the following message when ACK doesn't get back in a timely manner:
+
+WARN hdfs.DFSClient: Slow waitForAckedSeqno took 39264ms (threshold=30000ms)
+
+It would be nice to tell what file it's writing, and what DataNodes are in the pipeline, together with this message, to facilitate investigating related performance issue.",WARN hdfs.DFSClient: Slow waitForAckedSeqno took 39264ms (threshold=30000ms),hadoop-hdfs-project/hadoop-hdfs-client/src/main/java/org/apache/hadoop/hdfs/DataStreamer.java::DataStreamer.waitForAckedSeqno(long),"void waitForAckedSeqno(long seqno) throws IOException {
+    try (TraceScope ignored = dfsClient.getTracer().
+        newScope(""waitForAckedSeqno"")) {
+      LOG.debug(""{} waiting for ack for: {}"", this, seqno);
+      long begin = Time.monotonicNow();
+      try {
+        synchronized (dataQueue) {
+          while (!streamerClosed) {
+            checkClosed();
+            if (lastAckedSeqno >= seqno) {
+              break;
+            }
+...",https://github.com/apache/hadoop/commit/0914fcca312b5e9d20bcf1b6633bc13c9034ba46,,,,,,,,
+7,HDFS-5291,pathidea,HDFS,https://issues.apache.org/jira/browse/HDFS-5291,https://github.com/apache/hadoop/commit/1fe1942328856dd832e9f94fb56a40ab3d810870,Clients need to retry when Active NN is in SafeMode,"In our test, we saw NN immediately went into safemode after transitioning to active state. This can cause HBase region server to timeout and kill itself. We should allow clients to retry when HA is enabled and ANN is in SafeMode.
+
+============================================
+Some log snippets:
+
+standby state to active transition
+{code}
+2013-10-02 00:13:49,482 INFO  ipc.Server (Server.java:run(2068)) - IPC Server handler 69 on 8020, call org.apache.hadoop.hdfs.protocol.ClientProtocol.renewLease from IP:33911 Call#1483 Retry#1: error: org.apache.hadoop.ipc.StandbyException: Operation category WRITE is not supported in state standby
+2013-10-02 00:13:49,689 INFO  ipc.Server (Server.java:saslProcess(1342)) - Auth successful for nn/hostname@EXAMPLE.COM (auth:SIMPLE)
+2013-10-02 00:13:49,696 INFO ","2013-10-02 00:13:49,482 INFO  ipc.Server (Server.java:run(2068)) - IPC Server handler 69 on 8020, call org.apache.hadoop.hdfs.protocol.ClientProtocol.renewLease from IP:33911 Call#1483 Retry#1: error: org.apache.hadoop.ipc.StandbyException: Operation category WRITE is not supported in state standby
+2013-10-02 00:13:49,689 INFO  ipc.Server (Server.java:saslProcess(1342)) - Auth successful for nn/hostname@EXAMPLE.COM (auth:SIMPLE)
+2013-10-02 00:13:49,696 INFO  authorize.ServiceAuthorizationManager (ServiceAuthorizationManager.java:authorize(111)) - Authorization successful for nn/hostname@EXAMPLE.COM (auth:KERBEROS) for protocol=interface org.apache.hadoop.ha.HAServiceProtocol
+2013-10-02 00:13:49,700 INFO  namenode.FSNamesystem (FSNamesystem.java:stopStandbyServices(1013)) - Stopping services started for standby state
+2013-10-02 00:13:49,701 WARN  ha.EditLogTailer (EditLogTailer.java:doWork(336)) - Edit log tailer interrupted","hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/io/retry/RetryPolicies.java::RetryPolicies.FailoverOnNetworkExceptionRetry.shouldRetry(Exception,int,int,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.abandonBlock(ExtendedBlock,String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.allowSnapshot(String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.analyzeFileState(String,long,String,ExtendedBlock,LocatedBlock[]);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.appendFileInt(String,String,String,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.cancelDelegationToken(Token);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.checkUCBlock(ExtendedBlock,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.commitBlockSynchronization(ExtendedBlock,long,long,boolean,boolean,DatanodeID[],String[]);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.completeFile(String,String,ExtendedBlock,long);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.concatInt(String,String[],boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.createSnapshot(String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.createSymlinkInt(String,String,PermissionStatus,boolean,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.deleteInternal(String,boolean,boolean,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.deleteSnapshot(String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.disallowSnapshot(String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.endCheckpoint(NamenodeRegistration,CheckpointSignature);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.fsync(String,String,long);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.getAdditionalDatanode(String,ExtendedBlock,DatanodeInfo[],Set,int,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.getBlockLocationsInt(String,long,long,boolean,boolean,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.getDelegationToken(Text);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.mkdirsInt(String,PermissionStatus,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.nextBlockId();hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.nextGenerationStamp(boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.recoverLease(String,String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.renameSnapshot(String,String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.renameTo(String,String,Rename...);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.renameToInt(String,String,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.renewDelegationToken(Token);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.renewLease(String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.rollEditLog();hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.setOwnerInt(String,String,String);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.setPermissionInt(String,FsPermission);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.setQuota(String,long,long);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.setReplicationInt(String,short);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.setTimesInt(String,long,long);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.startCheckpoint(NamenodeRegistration,NamenodeRegistration);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.startFileInt(String,PermissionStatus,String,String,EnumSet,boolean,short,long,boolean);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/FSNamesystem.java::FSNamesystem.updatePipeline(String,ExtendedBlock,ExtendedBlock,DatanodeID[]);hadoop-hdfs-project/hadoop-hdfs/src/main/java/org/apache/hadoop/hdfs/server/namenode/SafeModeException.java::SafeModeException.<init>()","@Override
+    public RetryAction shouldRetry(Exception e, int retries,
+        int failovers, boolean isIdempotentOrAtMostOnce) throws Exception {
+      if (failovers >= maxFailovers) {
+        return new RetryAction(RetryAction.RetryDecision.FAIL, 0,
+            ""failovers ("" + failovers + "") exceeded maximum allowed (""
+            + maxFailovers + "")"");
+      }
+      
+      if (e instanceof ConnectException ||
+          e instanceof NoRouteToHostException ||
+          e instanceof UnknownHostException ||
+...",https://github.com/apache/hadoop/commit/1fe1942328856dd832e9f94fb56a40ab3d810870,,,,,,,,
+8,HDFS-6455,pathidea,HDFS,https://issues.apache.org/jira/browse/HDFS-6455,https://github.com/apache/hadoop/commit/2a5f1029a5221c42ab61b22f99d79251ed069ca4,NFS: Exception should be added in NFS log for invalid separator in nfs.exports.allowed.hosts,"The error for invalid separator in dfs.nfs.exports.allowed.hosts property should be added in nfs log file instead nfs.out file.
+
+Steps to reproduce:
+1. Pass invalid separator in dfs.nfs.exports.allowed.hosts
+{noformat}
+<property><name>dfs.nfs.exports.allowed.hosts</name><value>host1  ro:host2 rw</value></property>
+{noformat}
+
+2. restart NFS server. NFS server fails to start and print exception console.
+{noformat}
+[hrt_qa@host1 hwqe]$ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null host1 ""sudo su - -c \""/usr/lib/hadoop/sbin/hadoop-daemon.sh start nfs3\"" hdfs""
+starting nfs3, logging to /tmp/log/hadoop/hdfs/hadoop-hdfs-nfs3-horst1.out
+DEPRECATED: Use of this script to execute hdfs command is deprecated.
+Instead use the hdfs command for it.
+
+Exception in thread ""main"" java.lang","Exception in thread ""main"" java.lang.IllegalArgumentException: Incorrectly formatted line 'host1 ro:host2 rw'
+at org.apache.hadoop.nfs.NfsExports.getMatch(NfsExports.java:356)
+at org.apache.hadoop.nfs.NfsExports.<init>(NfsExports.java:151)
+at org.apache.hadoop.nfs.NfsExports.getInstance(NfsExports.java:54)
+at org.apache.hadoop.hdfs.nfs.nfs3.RpcProgramNfs3.<init>(RpcProgramNfs3.java:176)","hadoop-common-project/hadoop-nfs/src/main/java/org/apache/hadoop/nfs/NfsExports.java::NfsExports.getInstance(Configuration);hadoop-hdfs-project/hadoop-hdfs-nfs/src/main/java/org/apache/hadoop/hdfs/nfs/mount/RpcProgramMountd.java::RpcProgramMountd.handleInternal(ChannelHandlerContext,RpcInfo);hadoop-hdfs-project/hadoop-hdfs-nfs/src/main/java/org/apache/hadoop/hdfs/nfs/mount/RpcProgramMountd.java::RpcProgramMountd.mnt(XDR,XDR,int,InetAddress);hadoop-hdfs-project/hadoop-hdfs-nfs/src/main/java/org/apache/hadoop/hdfs/nfs/nfs3/RpcProgramNfs3.java::RpcProgramNfs3.checkAccessPrivilege(SocketAddress,AccessPrivilege)","public static synchronized NfsExports getInstance(Configuration conf) {
+    if (exports == null) {
+      String matchHosts = conf.get(
+          CommonConfigurationKeys.NFS_EXPORTS_ALLOWED_HOSTS_KEY,
+          CommonConfigurationKeys.NFS_EXPORTS_ALLOWED_HOSTS_KEY_DEFAULT);
+      int cacheSize = conf.getInt(Nfs3Constant.NFS_EXPORTS_CACHE_SIZE_KEY,
+          Nfs3Constant.NFS_EXPORTS_CACHE_SIZE_DEFAULT);
+      long expirationPeriodNano = conf.getLong(
+          Nfs3Constant.NFS_EXPORTS_CACHE_EXPIRYTIME_MILLIS_KEY,
+          Nfs3Constant.NFS_EXPORTS_CACHE_EXPIRYTIME_MILLIS_DEFAULT) * 1000 * 1000;
+      exports = new NfsExports(cacheSize, expirationPeriodNano, matchHosts);
+    }
+...",https://github.com/apache/hadoop/commit/2a5f1029a5221c42ab61b22f99d79251ed069ca4,,,,,,,,
+9,HIVE-8545,pathidea,HIVE,https://issues.apache.org/jira/browse/HIVE-8545,https://github.com/apache/hive/commit/4faa7fa8470feeb3cc266630ec3586537812858b,Exception when casting Text to BytesWritable [Spark Branch],"With the current multi-insertion implementation, when caching is enabled for input RDD, query may fail with the following exception:
+
+{noformat}
+2014-10-21 13:57:34,742 WARN  [task-result-getter-0]: scheduler.TaskSetManager (Logging.scala:logWarning(71)) - Lost task 0.0 in stage 1.0 (TID 1, localhost): java.lang.ClassCastException: org.apache.hadoop.io.Text cannot be cast to org.apache.hadoop.io.BytesWritable
+        org.apache.hadoop.hive.ql.exec.spark.MapInput$CopyFunction.[MASKED_METHOD](MapInput.java:67)
+        org.apache.hadoop.hive.ql.exec.spark.MapInput$CopyFunction.[MASKED_METHOD](MapInput.java:61)
+        org.apache.spark.api.java.JavaPairRDD$$anonfun$pairFunToScalaFun$1.apply(JavaPairRDD.scala:1002)
+        org.apache.spark.api.java.JavaPairRDD$$anonfun$pairFunToScalaFun$1.apply","2014-10-21 13:57:34,742 WARN  [task-result-getter-0]: scheduler.TaskSetManager (Logging.scala:logWarning(71)) - Lost task 0.0 in stage 1.0 (TID 1, localhost): java.lang.ClassCastException: org.apache.hadoop.io.Text cannot be cast to org.apache.hadoop.io.BytesWritable","ql/src/java/org/apache/hadoop/hive/ql/exec/spark/HiveBaseFunctionResultList.java::HiveBaseFunctionResultList.collect(HiveKey,BytesWritable);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/HiveBaseFunctionResultList.java::HiveBaseFunctionResultList.copyHiveKey(HiveKey);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/MapInput.java::MapInput.<init>(JavaPairRDD);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/MapInput.java::MapInput.<init>(JavaPairRDD,boolean);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/MapInput.java::MapInput.CopyFunction.call(Tuple2);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/MapInput.java::MapInput.transform(JavaPairRDD);ql/src/java/org/apache/hadoop/hive/ql/exec/spark/SparkPlanGenerator.java::SparkPlanGenerator.generateMapInput(MapWork)","@Override
+  public void collect(HiveKey key, BytesWritable value) throws IOException {
+    lastRecordOutput.add(copyHiveKey(key), SparkUtilities.copyBytesWritable(value));
+  }",https://github.com/apache/hive/commit/4faa7fa8470feeb3cc266630ec3586537812858b,,,,,,,,
+10,HIVE-8771,pathidea,HIVE,https://issues.apache.org/jira/browse/HIVE-8771,https://github.com/apache/hive/commit/5156b110447c9166e3408dfde21df2a7b7d8fdd7,Abstract merge file operator does not move/rename incompatible files correctly,"[MASKED LINE]
+Stack trace:
+{code}
+2014-11-05 02:38:56,588 DEBUG fs.FileSystem (RawLocalFileSystem.java:rename(337)) - Falling through to a copy of file:/home/prasanth/hive/itests/qtest/target/warehouse/orc_merge5a/st=80.0/000000_0 to file:/home/prasanth/hive/itests/qtest/target/tmp/scratchdir/prasanth/0de64e52-6615-4c5a-bdfb-c3b2c28131f6/hive_2014-11-05_02-38-55_511_7578595409877157627-1/_tmp.-ext-10000/000000_0/000000_0
+2014-11-05 02:38:56,589 INFO  mapred.LocalJobRunner (LocalJobRunner.java:runTasks(456)) - map task executor complete.
+2014-11-05 02:38:56,590 WARN  mapred.LocalJobRunner (LocalJobRunner.java:run(560)) - job_local1144733438_0036
+java.lang.Exception: java.io.IOException: org.apache.hadoop.hive.ql.metadata.HiveException: Failed to close AbstractFileMergeOperator
+        at or","2014-11-05 02:38:56,588 DEBUG fs.FileSystem (RawLocalFileSystem.java:rename(337)) - Falling through to a copy of file:/home/prasanth/hive/itests/qtest/target/warehouse/orc_merge5a/st=80.0/000000_0 to file:/home/prasanth/hive/itests/qtest/target/tmp/scratchdir/prasanth/0de64e52-6615-4c5a-bdfb-c3b2c28131f6/hive_2014-11-05_02-38-55_511_7578595409877157627-1/_tmp.-ext-10000/000000_0/000000_0
+2014-11-05 02:38:56,589 INFO  mapred.LocalJobRunner (LocalJobRunner.java:runTasks(456)) - map task executor complete.
+2014-11-05 02:38:56,590 WARN  mapred.LocalJobRunner (LocalJobRunner.java:run(560)) - job_local1144733438_0036
+at org.apache.hadoop.mapred.LocalJobRunner$Job.runTasks(LocalJobRunner.java:462)
+at org.apache.hadoop.mapred.LocalJobRunner$Job.run(LocalJobRunner.java:522)",ql/src/java/org/apache/hadoop/hive/ql/exec/AbstractFileMergeOperator.java::AbstractFileMergeOperator.closeOp(boolean),"@Override
+  public void closeOp(boolean abort) throws HiveException {
+    try {
+      if (!exception) {
+        FileStatus fss = fs.getFileStatus(outPath);
+        if (!fs.rename(outPath, finalPath)) {
+          throw new IOException(
+              ""Unable to rename "" + outPath + "" to "" + finalPath);
+        }
+        LOG.info(""renamed path "" + outPath + "" to "" + finalPath + "" . File"" +
+            "" size is ""
+            + fss.getLen());
+...",https://github.com/apache/hive/commit/5156b110447c9166e3408dfde21df2a7b7d8fdd7,,,,,,,,
+11,HIVE-10690,pathidea,HIVE,https://issues.apache.org/jira/browse/HIVE-10690,https://github.com/apache/hive/commit/1e0088fc6cebc899cce6d4c54b111d96136294d9,ArrayIndexOutOfBounds exception in MetaStoreDirectSql.[MASKED_METHOD],"Noticed a bunch of these stack traces in hive.log while running some unit tests:
+
+{noformat}
+2015-05-11 21:18:59,371 WARN  [main]: metastore.ObjectStore (ObjectStore.java:handleDirectSqlError(2420)) - Direct SQL failed
+java.lang.IndexOutOfBoundsException: Index: 0, Size: 0
+        at java.util.ArrayList.rangeCheck(ArrayList.java:635)
+        at java.util.ArrayList.get(ArrayList.java:411)
+        at org.apache.hadoop.hive.metastore.MetaStoreDirectSql.aggrColStatsForPartitions(MetaStoreDirectSql.java:1132)
+        at org.apache.hadoop.hive.metastore.ObjectStore$8.getSqlResult(ObjectStore.java:6162)
+        at org.apache.hadoop.hive.metastore.ObjectStore$8.getSqlResult(ObjectStore.java:6158)
+        at org.apache.hadoop.hive.metastore.ObjectStore$GetHelper.run(ObjectStore.java:2385)
+        a","2015-05-11 21:18:59,371 WARN  [main]: metastore.ObjectStore (ObjectStore.java:handleDirectSqlError(2420)) - Direct SQL failed
+java.lang.IndexOutOfBoundsException: Index: 0, Size: 0
+at java.util.ArrayList.rangeCheck(ArrayList.java:635)
+at java.util.ArrayList.get(ArrayList.java:411)
+at org.apache.hadoop.hive.metastore.MetaStoreDirectSql.aggrColStatsForPartitions(MetaStoreDirectSql.java:1132)","metastore/src/java/org/apache/hadoop/hive/metastore/MetaStoreDirectSql.java::MetaStoreDirectSql.aggrColStatsForPartitions(String,String,List,List,boolean)","public AggrStats aggrColStatsForPartitions(String dbName, String tableName,
+      List<String> partNames, List<String> colNames, boolean useDensityFunctionForNDVEstimation)
+      throws MetaException {
+    long partsFound = partsFoundForPartitions(dbName, tableName, partNames, colNames);
+    List<ColumnStatisticsObj> colStatsList;
+    // Try to read from the cache first
+    if (isAggregateStatsCacheEnabled) {
+      AggrColStats colStatsAggrCached;
+      List<ColumnStatisticsObj> colStatsAggrFromDB;
+      int maxPartsPerCacheNode = aggrStatsCache.getMaxPartsPerCacheNode();
+      float fpp = aggrStatsCache.getFalsePositiveProbability();
+      int partitionsRequested = partNames.size();
+...",https://github.com/apache/hive/commit/1e0088fc6cebc899cce6d4c54b111d96136294d9,,,,,,,,
+12,HIVE-17774,pathidea,HIVE,https://issues.apache.org/jira/browse/HIVE-17774,https://github.com/apache/hive/commit/5f11ba9d23543ed983b68958239a087af38108db,compaction may start with 0 splits and fail,"{noformat}
+2017-09-26 10:36:01,979 INFO  [...]: compactor.CompactorMR (CompactorMR.java:launchCompactionJob(295)) - 
+Submitting MINOR compaction job ....
+ (current delta dirs count=0, obsolete delta dirs count=0. TxnIdRange[9223372036854775807,-9223372036854775808]
+...
+2017-09-26 10:36:02,350 INFO  [...]: mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(198)) - number of splits:0
+...
+2017-09-26 10:36:08,637 INFO  [...]: mapreduce.Job (Job.java:monitorAndPrintJob(1380)) - 
+Job job_1503950256860_15982 failed with state FAILED due to: No of maps and reduces are 0 job_1503950256860_15982
+Job commit failed: java.io.FileNotFoundException: File .../hello_acid/load_date=2016-03-03/_tmp_a95346ad-bd89-4e66-9b05-e60fdfa11858 does not exist.
+	at org.apache.hadoop.hdfs.DistributedFileSystem.","2017-09-26 10:36:01,979 INFO  [...]: compactor.CompactorMR (CompactorMR.java:launchCompactionJob(295)) -
+2017-09-26 10:36:02,350 INFO  [...]: mapreduce.JobSubmitter (JobSubmitter.java:submitJobInternal(198)) - number of splits:0
+2017-09-26 10:36:08,637 INFO  [...]: mapreduce.Job (Job.java:monitorAndPrintJob(1380)) -
+at org.apache.hadoop.hdfs.DistributedFileSystem.listStatusInternal(DistributedFileSystem.java:904)
+at org.apache.hadoop.hdfs.DistributedFileSystem.access$600(DistributedFileSystem.java:113)","ql/src/java/org/apache/hadoop/hive/ql/txn/compactor/CompactorMR.java::CompactorMR.run(HiveConf,String,Table,StorageDescriptor,ValidTxnList,CompactionInfo,StatsUpdater,TxnStore)","void run(HiveConf conf, String jobName, Table t, StorageDescriptor sd,
+           ValidTxnList txns, CompactionInfo ci, Worker.StatsUpdater su, TxnStore txnHandler) throws IOException {
+
+    if(conf.getBoolVar(HiveConf.ConfVars.HIVE_IN_TEST) && conf.getBoolVar(HiveConf.ConfVars.HIVETESTMODEFAILCOMPACTION)) {
+      throw new RuntimeException(HiveConf.ConfVars.HIVETESTMODEFAILCOMPACTION.name() + ""=true"");
+    }
+    JobConf job = createBaseJobConf(conf, jobName, t, sd, txns, ci);
+
+    // Figure out and encode what files we need to read.  We do this here (rather than in
+    // getSplits below) because as part of this we discover our minimum and maximum transactions,
+    // and discovering that in getSplits is too late as we then have no way to pass it to our
+    // mapper.
+...",https://github.com/apache/hive/commit/5f11ba9d23543ed983b68958239a087af38108db,,,,,,,,
+13,MAPREDUCE-964,pathidea,MAPREDUCE,https://issues.apache.org/jira/browse/MAPREDUCE-964,https://github.com/apache/hadoop/commit/a5be582612eb6391aafc200f580059c9b445eac6,Inaccurate values in jobSummary logs,"For some jobs the mapSlotSeconds is incorrect.
+
+negative value
+
+09/09/01 18:31:44 INFOmapred.JobInProgress$JobSummary: jobId=job_200908270718_4568,submitTime=1251823543976,launchTime=1251823554310,finishTime=1251829904565,            numMaps=7965,numSlotsPerMap=1,numReduces=40,numSlotsPerReduce=1,user=wile,queue=runner,status=SUCCEEDED,         mapSlotSeconds=-2503133523,reduceSlotsSeconds=186536,clusterMapCapacity=11262,clusterReduceCapacity=3754
+
+or too high
+
+09/09/02 23:59:57 INFO mapred.JobInProgress$JobSummary: jobId=job_200908270718_5861,submitTime=1251935672924,launchTime=1251935687698,finishTime=1251935997949,            numMaps=1026,numSlotsPerMap=1,numReduces=10,numSlotsPerReduce=1,user=dfsload,queue=gridops,status=SUCCEEDED,         
+mapSlotSeconds=1251949742,reduceSlotsSeconds=","09/09/02 23:59:57 INFO mapred.JobInProgress$JobSummary: jobId=job_200908270718_5861,submitTime=1251935672924,launchTime=1251935687698,finishTime=1251935997949,            numMaps=1026,numSlotsPerMap=1,numReduces=10,numSlotsPerReduce=1,user=dfsload,queue=gridops,status=SUCCEEDED,","src/mapred/org/apache/hadoop/mapred/TaskStatus.java::TaskStatus.setFinishTime(long);src/mapred/org/apache/hadoop/mapred/TaskStatus.java::TaskStatus.setStartTime(long);src/mapred/org/apache/hadoop/mapred/TaskStatus.java::TaskStatus.statusUpdate(State,float,String,Phase,long);src/mapred/org/apache/hadoop/mapred/TaskStatus.java::TaskStatus.statusUpdate(TaskStatus)","void setFinishTime(long finishTime) {
+    this.finishTime = finishTime;
+  }",https://github.com/apache/hadoop/commit/a5be582612eb6391aafc200f580059c9b445eac6,,,,,,,,
+14,MAPREDUCE-3053,pathidea,MAPREDUCE,https://issues.apache.org/jira/browse/MAPREDUCE-3053,https://github.com/apache/hadoop/commit/70d6537d398f4e5524a428b0d206555dd0b54c88,YARN Protobuf RPC Failures in RM,"When I try to register my ApplicationMaster with YARN's RM, it fails.
+
+In my ApplicationMaster's logs:
+
+Exception in thread ""main"" java.lang.reflect.UndeclaredThrowableException
+	at org.apache.hadoop.yarn.api.impl.pb.client.AMRMProtocolPBClientImpl.registerApplicationMaster(AMRMProtocolPBClientImpl.java:108)
+	at kafka.yarn.util.ApplicationMasterHelper.registerWithResourceManager(YarnHelper.scala:48)
+	at kafka.yarn.ApplicationMaster$.main(ApplicationMaster.scala:32)
+	at kafka.yarn.ApplicationMaster.main(ApplicationMaster.scala)
+Caused by: com.google.protobuf.ServiceException: java.lang.NullPointerException: java.lang.NullPointerException
+	at org.apache.hadoop.yarn.proto.ClientRMProtocol$ClientRMProtocolService$2.getRequestPrototype(ClientRMProtocol.java:186)
+	at org.apache.hadoop.yarn.ipc.P","Exception in thread ""main"" java.lang.reflect.UndeclaredThrowableException
+at org.apache.hadoop.yarn.api.impl.pb.client.AMRMProtocolPBClientImpl.registerApplicationMaster(AMRMProtocolPBClientImpl.java:108)
+at kafka.yarn.util.ApplicationMasterHelper.registerWithResourceManager(YarnHelper.scala:48)
+at kafka.yarn.ApplicationMaster$.main(ApplicationMaster.scala:32)
+Caused by: com.google.protobuf.ServiceException: java.lang.NullPointerException: java.lang.NullPointerException","hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-common/src/main/java/org/apache/hadoop/yarn/ipc/ProtoOverHadoopRpcEngine.java::ProtoOverHadoopRpcEngine.Server.call(Class,Writable,long);hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/rmnode/RMNodeImpl.java::RMNodeImpl.<init>(NodeId,RMContext,String,int,int,Node,Resource);hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/rmnode/RMNodeImpl.java::RMNodeImpl.StatusUpdateWhenHealthyTransition.transition(RMNodeImpl,RMNodeEvent);hadoop-mapreduce-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/rmnode/RMNodeImpl.java::RMNodeImpl.StatusUpdateWhenUnHealthyTransition.transition(RMNodeImpl,RMNodeEvent)","@Override
+    public Writable call(Class<?> protocol, Writable writableRequest,
+        long receiveTime) throws IOException {
+      ProtoSpecificRequestWritable request = (ProtoSpecificRequestWritable) writableRequest;
+      ProtoSpecificRpcRequest rpcRequest = request.message;
+      String methodName = rpcRequest.getMethodName();
+      System.out.println(""Call: protocol="" + protocol.getCanonicalName() + "", method=""
+          + methodName);
+      if (verbose)
+        log(""Call: protocol="" + protocol.getCanonicalName() + "", method=""
+            + methodName);
+      MethodDescriptor methodDescriptor = service.getDescriptorForType()
+...",https://github.com/apache/hadoop/commit/70d6537d398f4e5524a428b0d206555dd0b54c88,,,,,,,,
+15,STORM-2987,pathidea,STORM,https://issues.apache.org/jira/browse/STORM-2987,https://github.com/apache/storm/commit/80f59a9fd6f4c00469d58f9410a01d77339e286d,PaceMakerStateStorage should deal with InterruptedException correctly,"We found an issue that when nimbus restarted, it can only get leadership after a few seconds (15~20s). 
+
+ 
+{code:java}
+2018-02-27 08:18:43.420 main o.a.s.z.LeaderElectorImp [INFO] Queued up for leader lock.
+2018-02-27 08:18:43.481 main o.a.s.d.m.MetricsUtils [INFO] Using statistics reporter plugin:org.apache.storm.daemon.metrics.reporters.JmxPreparableReporter
+2018-02-27 08:18:43.483 main o.a.s.d.m.r.JmxPreparableReporter [INFO] Preparing...
+2018-02-27 08:18:43.499 main o.a.s.m.StormMetricsRegistry [INFO] Started statistics report plugin...
+2018-02-27 08:18:43.543 main o.a.s.m.n.Login [INFO] successfully logged in.
+2018-02-27 08:18:43.551 main o.a.s.z.ClientZookeeper [INFO] Staring ZK Curator
+2018-02-27 08:18:43.551 main o.a.c.f.i.CuratorFrameworkImpl [INFO] Starting
+2018-02-27 08:18:43.55","2018-02-27 08:18:43.420 main o.a.s.z.LeaderElectorImp [INFO] Queued up for leader lock.
+2018-02-27 08:18:43.481 main o.a.s.d.m.MetricsUtils [INFO] Using statistics reporter plugin:org.apache.storm.daemon.metrics.reporters.JmxPreparableReporter
+2018-02-27 08:18:43.483 main o.a.s.d.m.r.JmxPreparableReporter [INFO] Preparing...
+2018-02-27 08:18:43.499 main o.a.s.m.StormMetricsRegistry [INFO] Started statistics report plugin...
+2018-02-27 08:18:43.543 main o.a.s.m.n.Login [INFO] successfully logged in.","storm-client/src/jvm/org/apache/storm/cluster/PaceMakerStateStorage.java::PaceMakerStateStorage.delete_worker_hb(String);storm-client/src/jvm/org/apache/storm/cluster/PaceMakerStateStorage.java::PaceMakerStateStorage.get_worker_hb(String,boolean);storm-client/src/jvm/org/apache/storm/cluster/PaceMakerStateStorage.java::PaceMakerStateStorage.get_worker_hb_children(String,boolean);storm-client/src/jvm/org/apache/storm/cluster/PaceMakerStateStorage.java::PaceMakerStateStorage.set_worker_hb(String,byte[],List);storm-client/src/jvm/org/apache/storm/pacemaker/PacemakerClient.java::PacemakerClient.send(HBMessage);storm-client/src/jvm/org/apache/storm/pacemaker/PacemakerClient.java::PacemakerClient.waitUntilReady();storm-client/src/jvm/org/apache/storm/pacemaker/PacemakerClientPool.java::PacemakerClientPool.rotateClients();storm-client/src/jvm/org/apache/storm/pacemaker/PacemakerClientPool.java::PacemakerClientPool.send(HBMessage);storm-client/src/jvm/org/apache/storm/pacemaker/PacemakerClientPool.java::PacemakerClientPool.sendAll(HBMessage)","@Override
+    public void delete_worker_hb(String path) {
+        int retry = maxRetries;
+        boolean someSucceeded;
+        while (true) {
+            someSucceeded = false;
+            try {
+                HBMessage message = new HBMessage(HBServerMessageType.DELETE_PATH, HBMessageData.path(path));
+                List<HBMessage> responses = pacemakerClientPool.sendAll(message);
+                boolean allSucceeded = true;
+                for(HBMessage response : responses) {
+                    if (response.get_type() != HBServerMessageType.DELETE_PATH_RESPONSE) {
+...",https://github.com/apache/storm/commit/80f59a9fd6f4c00469d58f9410a01d77339e286d,,,,,,,,
+16,STORM-1540,pathidea,STORM,https://issues.apache.org/jira/browse/STORM-1540,https://github.com/apache/storm/commit/0f0dea0b4d2b17d6e8dc32e82341b8aec70ef6e9,Topology Debug/Sampling Breaks Trident Topologies,"Steps to reproduce:
+
+1. Deploy a Trident topology.
+2. Turn on debug/sampling.
+
+Workers will crash with the following error:
+
+2016-02-11 14:13:23.617 o.a.s.util [ERROR] Async loop died!
+java.lang.RuntimeException: java.lang.RuntimeException: java.io.NotSerializableException: org.apache.storm.trident.tuple.ConsList
+	at org.apache.storm.utils.DisruptorQueue.consumeBatchToCursor(DisruptorQueue.java:448) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]
+	at org.apache.storm.utils.DisruptorQueue.consumeBatchWhenAvailable(DisruptorQueue.java:414) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]
+	at org.apache.storm.disruptor$consume_batch_when_available.invoke(disruptor.clj:73) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]
+	at org.apache.storm.disruptor$consume_loop_STAR_$fn__7651.invoke(disruptor","2016-02-11 14:13:23.617 o.a.s.util [ERROR] Async loop died!
+java.lang.RuntimeException: java.lang.RuntimeException: java.io.NotSerializableException: org.apache.storm.trident.tuple.ConsList
+at org.apache.storm.utils.DisruptorQueue.consumeBatchToCursor(DisruptorQueue.java:448) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]
+at org.apache.storm.utils.DisruptorQueue.consumeBatchWhenAvailable(DisruptorQueue.java:414) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]
+at org.apache.storm.disruptor$consume_batch_when_available.invoke(disruptor.clj:73) ~[storm-core-1.0.0-SNAPSHOT.jar:1.0.0-SNAPSHOT]",storm-core/src/jvm/org/apache/storm/serialization/SerializationFactory.java::SerializationFactory.getKryo(Map);storm-core/src/jvm/org/apache/storm/trident/tuple/ConsList.java::ConsList.size(),"public static Kryo getKryo(Map conf) {
+        IKryoFactory kryoFactory = (IKryoFactory) Utils.newInstance((String) conf.get(Config.TOPOLOGY_KRYO_FACTORY));
+        Kryo k = kryoFactory.getKryo(conf);
+        k.register(byte[].class);
+
+        /* tuple payload serializer is specified via configuration */
+        String payloadSerializerName = (String)conf.get(Config.TOPOLOGY_TUPLE_SERIALIZER);
+        try {
+            Class serializerClass  = Class.forName(payloadSerializerName);
+            Serializer serializer = resolveSerializerInstance(k, ListDelegate.class, serializerClass, conf);
+            k.register(ListDelegate.class, serializer);
+        } catch (ClassNotFoundException ex) {
+...",https://github.com/apache/storm/commit/0f0dea0b4d2b17d6e8dc32e82341b8aec70ef6e9,,,,,,,,
+17,YARN-7727,pathidea,YARN,https://issues.apache.org/jira/browse/YARN-7727,https://github.com/apache/hadoop/commit/09d1aba038642e2a648561cb1bfe00779e45efbd,Incorrect log levels in few logs with QueuePriorityContainerCandidateSelector,"1. RM logs are verbose with below log message repeats for every fraction of second from QueuePriorityContainerCandidateSelector
+2. And there is a minor issue where we log info message after checking debug enabled.
+
+{code}
+2018-01-10 05:46:07,834 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initializing priority preemption directed graph:
+2018-01-10 05:46:10,835 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initializing priority preemption directed graph:
+2018-01-10 05:46:13,836 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initia","2018-01-10 05:46:07,834 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initializing priority preemption directed graph:
+2018-01-10 05:46:10,835 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initializing priority preemption directed graph:
+2018-01-10 05:46:13,836 INFO  capacity.QueuePriorityContainerCandidateSelector (QueuePriorityContainerCandidateSelector.java:intializePriorityDigraph(122)) - Initializing priority preemption directed graph:",hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/monitor/capacity/QueuePriorityContainerCandidateSelector.java::QueuePriorityContainerCandidateSelector.intializePriorityDigraph(),"private void intializePriorityDigraph() {
+    LOG.info(""Initializing priority preemption directed graph:"");
+
+    // Make sure we iterate all leaf queue combinations
+    for (String q1 : preemptionContext.getLeafQueueNames()) {
+      for (String q2 : preemptionContext.getLeafQueueNames()) {
+        // Make sure we only calculate each combination once instead of all
+        // permutations
+        if (q1.compareTo(q2) < 0) {
+          TempQueuePerPartition tq1 = preemptionContext.getQueueByPartition(q1,
+              RMNodeLabelsManager.NO_LABEL);
+          TempQueuePerPartition tq2 = preemptionContext.getQueueByPartition(q2,
+...",https://github.com/apache/hadoop/commit/09d1aba038642e2a648561cb1bfe00779e45efbd,,,,,,,,
+18,YARN-4763,pathidea,YARN,https://issues.apache.org/jira/browse/YARN-4763,https://github.com/apache/hadoop/commit/1415e6190a1811b8318f2bf254fea34e8c9cd154,RMApps Page crashes with NPE,"{noformat}
+=application_1457010932347_0121
+2016-03-04 10:16:27,016 INFO org.apache.hadoop.yarn.server.resourcemanager.security.DelegationTokenRenewer: application_1457010932347_0121 found existing hdfs token Kind: HDFS_DELEGATION_TOKEN, Service: ha-hdfs:hacluster, Ident: (HDFS_DELEGATION_TOKEN token 128 for yarn with renewer yarn)
+2016-03-04 10:16:27,029 ERROR org.apache.hadoop.yarn.webapp.Dispatcher: error handling URI: /cluster/apps
+java.lang.NullPointerException
+        at org.apache.hadoop.yarn.server.resourcemanager.webapp.RMAppsBlock.renderData(RMAppsBlock.java:100)
+        at org.apache.hadoop.yarn.server.webapp.AppsBlock.render(AppsBlock.java:140)
+        at org.apache.hadoop.yarn.webapp.view.HtmlBlock.render(HtmlBlock.java:69)
+        at org.apache.hadoop.yarn.webapp.view.HtmlBloc","2016-03-04 10:16:27,016 INFO org.apache.hadoop.yarn.server.resourcemanager.security.DelegationTokenRenewer: application_1457010932347_0121 found existing hdfs token Kind: HDFS_DELEGATION_TOKEN, Service: ha-hdfs:hacluster, Ident: (HDFS_DELEGATION_TOKEN token 128 for yarn with renewer yarn)
+2016-03-04 10:16:27,029 ERROR org.apache.hadoop.yarn.webapp.Dispatcher: error handling URI: /cluster/apps
+java.lang.NullPointerException
+at org.apache.hadoop.yarn.server.resourcemanager.webapp.RMAppsBlock.renderData(RMAppsBlock.java:100)
+at org.apache.hadoop.yarn.server.webapp.AppsBlock.render(AppsBlock.java:140)",hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-resourcemanager/src/main/java/org/apache/hadoop/yarn/server/resourcemanager/webapp/RMAppsBlock.java::RMAppsBlock.renderData(Block),"@Override
+  protected void renderData(Block html) {
+    TBODY<TABLE<Hamlet>> tbody =
+        html.table(""#apps"").thead().tr().th("".id"", ""ID"").th("".user"", ""User"")
+          .th("".name"", ""Name"").th("".type"", ""Application Type"")
+          .th("".queue"", ""Queue"").th("".priority"", ""Application Priority"")
+          .th("".starttime"", ""StartTime"")
+          .th("".finishtime"", ""FinishTime"").th("".state"", ""State"")
+          .th("".finalstatus"", ""FinalStatus"")
+          .th("".runningcontainer"", ""Running Containers"")
+          .th("".allocatedCpu"", ""Allocated CPU VCores"")
+          .th("".allocatedMemory"", ""Allocated Memory MB"")
+...",https://github.com/apache/hadoop/commit/1415e6190a1811b8318f2bf254fea34e8c9cd154,,,,,,,,
+19,YARN-1409,pathidea,YARN,https://issues.apache.org/jira/browse/YARN-1409,https://github.com/apache/hadoop/commit/785c12056ce2c6161b66699d995bd25198b9194f,NonAggregatingLogHandler can throw RejectedExecutionException,"[MASKED LINE]
+
+{code}
+2013-11-13 10:53:06,970 FATAL [AsyncDispatcher event handler] event.AsyncDispatcher (AsyncDispatcher.java:dispatch(166)) - Error in dispatcher thread
+java.util.concurrent.RejectedExecutionException: Task java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask@d51df63 rejected from java.util.concurrent.ScheduledThreadPoolExecutor@7a20e369[Shutting down, pool size = 4, active threads = 0, queued tasks = 7, completed tasks = 0]
+        at java.util.concurrent.ThreadPoolExecutor$AbortPolicy.rejectedExecution(ThreadPoolExecutor.java:2048)
+        at java.util.concurrent.ThreadPoolExecutor.reject(ThreadPoolExecutor.java:821)
+        at java.util.concurrent.ScheduledThreadPoolExecutor.delayedExecute(ScheduledThreadPoolExecutor.java:325)
+        at java.util.conc","2013-11-13 10:53:06,970 FATAL [AsyncDispatcher event handler] event.AsyncDispatcher (AsyncDispatcher.java:dispatch(166)) - Error in dispatcher thread
+java.util.concurrent.RejectedExecutionException: Task java.util.concurrent.ScheduledThreadPoolExecutor$ScheduledFutureTask@d51df63 rejected from java.util.concurrent.ScheduledThreadPoolExecutor@7a20e369[Shutting down, pool size = 4, active threads = 0, queued tasks = 7, completed tasks = 0]
+at java.util.concurrent.ThreadPoolExecutor$AbortPolicy.rejectedExecution(ThreadPoolExecutor.java:2048)
+at java.util.concurrent.ThreadPoolExecutor.reject(ThreadPoolExecutor.java:821)
+at java.util.concurrent.ScheduledThreadPoolExecutor.delayedExecute(ScheduledThreadPoolExecutor.java:325)",hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/containermanager/loghandler/NonAggregatingLogHandler.java::NonAggregatingLogHandler.handle(LogHandlerEvent),"@SuppressWarnings(""unchecked"")
+  @Override
+  public void handle(LogHandlerEvent event) {
+    switch (event.getType()) {
+      case APPLICATION_STARTED:
+        LogHandlerAppStartedEvent appStartedEvent =
+            (LogHandlerAppStartedEvent) event;
+        this.appOwners.put(appStartedEvent.getApplicationId(),
+            appStartedEvent.getUser());
+        this.dispatcher.getEventHandler().handle(
+            new ApplicationEvent(appStartedEvent.getApplicationId(),
+                ApplicationEventType.APPLICATION_LOG_HANDLING_INITED));
+...",https://github.com/apache/hadoop/commit/785c12056ce2c6161b66699d995bd25198b9194f,,,,,,,,
+20,ZOOKEEPER-1179,pathidea,ZOOKEEPER,https://issues.apache.org/jira/browse/ZOOKEEPER-1179,https://github.com/apache/zookeeper/commit/310f890ff8c4e4977204fb0dd8443bbe6ba3c7a1,NettyServerCnxn does not properly close socket on 4 letter word requests,"When calling a 4-letter-word to a server configured to use NettyServerCnxnFactory, the factory will not properly cancel all the keys and close the socket after sending the response for the 4lw. The close request will throw this exception, and the thread will not shut down:
+2011-09-13 12:14:17,546 - WARN  [New I/O server worker #1-1:NettyServerCnxnFactory$CnxnChannelHandler@117] - Exception caught [id: 0x009300cc, /1.1.1.1:38542 => /139.172.114.138:2181] EXCEPTION: java.io.IOException: A non-blocking socket operation could not be completed immediately
+java.io.IOException: A non-blocking socket operation could not be completed immediately
+	at sun.nio.ch.SocketDispatcher.close0(Native Method)
+	at sun.nio.ch.SocketDispatcher.preClose(SocketDispatcher.java:44)
+	at sun.nio.ch.SocketChannelImpl.i","2011-09-13 12:14:17,546 - WARN  [New I/O server worker #1-1:NettyServerCnxnFactory$CnxnChannelHandler@117] - Exception caught [id: 0x009300cc, /1.1.1.1:38542 => /139.172.114.138:2181] EXCEPTION: java.io.IOException: A non-blocking socket operation could not be completed immediately
+java.io.IOException: A non-blocking socket operation could not be completed immediately
+at sun.nio.ch.SocketDispatcher.close0(Native Method)
+at sun.nio.ch.SocketDispatcher.preClose(SocketDispatcher.java:44)
+at sun.nio.ch.SocketChannelImpl.implCloseSelectableChannel(SocketChannelImpl.java:684)",src/java/main/org/apache/zookeeper/server/NettyServerCnxn.java::NettyServerCnxn.sendBuffer(ByteBuffer),"@Override
+    public void sendBuffer(ByteBuffer sendBuffer) {
+        if (sendBuffer == ServerCnxnFactory.closeConn) {
+            channel.close();
+            return;
+        }
+        channel.write(wrappedBuffer(sendBuffer));
+        packetSent();
+    }",https://github.com/apache/zookeeper/commit/310f890ff8c4e4977204fb0dd8443bbe6ba3c7a1,,,,,,,,
+21,KAFKA-19426,post2025,KAFKA,https://issues.apache.org/jira/browse/KAFKA-19426,https://github.com/apache/kafka/commit/28ff2a47e6ed17e3569831a2d6d2e1c644cb2875,TopicBasedRemoteLogMetadataManager's initial should happen after the broker ready," 
+currently. the default value don't make sure the retry can always happen with successful
+
+For example: There are possible two timeout (2 * 60s) happen at TopicBasedRemoteLogMetadataManager#initializeResources
+[2025-06-03 21:57:21,151] INFO Topic __remote_log_metadata does not exist. Error: Timed out waiting for a node assignment. Call: listNodes at
+[2025-06-03 21:58:21,153] ERROR Encountered error while creating __remote_log_metadata topic. java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TimeoutException: Timed out waiting for a node assignment. Call: createTopics at
+
+ 
+
+this original default configure value request the server must be ready within 2 minutes. Not every broker can reach this requirement.
+
+So propose the [KIP-1197| https://cwiki.apache.org/confluence","[2025-06-03 21:57:21,151] INFO Topic __remote_log_metadata does not exist. Error: Timed out waiting for a node assignment. Call: listNodes at
+[2025-06-03 21:58:21,153] ERROR Encountered error while creating __remote_log_metadata topic. java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.TimeoutException: Timed out waiting for a node assignment. Call: createTopics at",storage/src/main/java/org/apache/kafka/server/log/remote/metadata/storage/TopicBasedRemoteLogMetadataManager.java::TopicBasedRemoteLogMetadataManager.configure(Map);storage/src/main/java/org/apache/kafka/server/log/remote/storage/RemoteLogManager.java::RemoteLogManager.remoteLogMetadataManager(),"@Override
+    public void configure(Map<String, ?> configs) {
+        Objects.requireNonNull(configs, ""configs can not be null."");
+        lock.writeLock().lock();
+        try {
+            if (configured.compareAndSet(false, true)) {
+                TopicBasedRemoteLogMetadataManagerConfig rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
+                // Scheduling the initialization producer/consumer managers in a separate thread. Required resources may
+                // not yet be available now. This thread makes sure that it is retried at regular intervals until it is
+                // successful.
+                initializationThread = KafkaThread.nonDaemon(
+                        ""RLMMInitializationThread"", () -> initializeResources(rlmmConfig));
+...",https://github.com/apache/kafka/commit/28ff2a47e6ed17e3569831a2d6d2e1c644cb2875,,,,,,,,
+22,KAFKA-19371,post2025,KAFKA,https://issues.apache.org/jira/browse/KAFKA-19371,https://github.com/apache/kafka/commit/14ea11dc31712ba41cbbbd8aaade4c2a4ef153e6,"When a broker restarts, it should not attempt to create the __remote_log_metadata topic if it already exists.","*[Precondition]*
+Kafka cluster already enabled the remote storage feature based on inner topic's implementation. The core inner topic ""__remote_log_metadata"" already created.
+ 
+*[Steps]*
+
+1. Restart one broker of the Kafka cluster.
+
+2. Check the log and the code logic for the ""__remote_log_metadata""s creating when broker restarting
+ 
+*[Expect result]*
+The broker shouldn't attempt to call API to create the topic due to that it already existed.
+ 
+*[Actual result]*
+The results are different which depend on the start process' duration for broker:
+*Case 1: Happy Path when restarting take a short time*
+[2025-06-03 22:35:11,648] INFO Topic __remote_log_metadata {color:#00875a}exists{color}. TopicId: 4CT2TTC-R6u7fNo_njYlDA, numPartitions: 50,
+
+*Case 2: Unhappy path 1 when restarting take some time","[2025-06-03 22:35:11,648] INFO Topic __remote_log_metadata {color:#00875a}exists{color}. TopicId: 4CT2TTC-R6u7fNo_njYlDA, numPartitions: 50,
+[2025-06-03 23:59:40,505] INFO Topic __remote_log_metadata{color:#de350b} does not exist{color}. Error: Timed out waiting for a node assignment. Call: listNodes
+[2025-06-04 00:00:36,938] INFO Topic [__remote_log_metadata] {color:#de350b}already exists{color}
+[2025-06-03 21:57:21,151] INFO Topic __remote_log_metadata {color:#de350b}does not exist{color}. Error: {color:#de350b}Timed out waiting{color} for a node assignment. Call: {color:#de350b}listNodes {color}at
+[2025-06-03 21:58:21,153] ERROR Encountered error while creating __remote_log_metadata topic. java.util.concurrent.ExecutionException: org.apache.kafka.common.errors.{color:#de350b}TimeoutException{color}: Timed out waiting for a node assignment. Call: {color:#de350b}createTopics {color}at","storage/src/main/java/org/apache/kafka/server/log/remote/metadata/storage/TopicBasedRemoteLogMetadataManager.java::TopicBasedRemoteLogMetadataManager.createTopic(Admin,NewTopic);storage/src/main/java/org/apache/kafka/server/log/remote/metadata/storage/TopicBasedRemoteLogMetadataManager.java::TopicBasedRemoteLogMetadataManager.doesTopicExist(Admin,String)","private boolean createTopic(Admin adminClient, NewTopic newTopic) {
+        boolean doesTopicExist = false;
+        String topic = newTopic.name();
+        try {
+            doesTopicExist = doesTopicExist(adminClient, topic);
+            if (!doesTopicExist) {
+                CreateTopicsResult result = adminClient.createTopics(Set.of(newTopic));
+                result.all().get();
+                List<String> overriddenConfigs = result.config(topic).get()
+                        .entries()
+                        .stream()
+                        .filter(entry -> !entry.isDefault())
+...",https://github.com/apache/kafka/commit/14ea11dc31712ba41cbbbd8aaade4c2a4ef153e6,,,,,,,,
+23,HIVE-29877,post2025,HIVE,https://issues.apache.org/jira/browse/HIVE-29877,https://github.com/apache/hive/commit/5ffc2f9991deea506931de3e1f886bdf50a37279,HMSCatalogAdapter fails to route Iceberg REST endpoints containing an optional {prefix},"Steps to repro:
+1. Connect a Spark SQL session to the HMS REST Catalog.
+2. Configure a prefix by setting: _--conf spark.sql.catalog.local.prefix=my_test_prefix_
+3. Run any command (e.g., SHOW DATABASES ) ;
+ 
+Stacktrace:
+{code:java}
+spark-sql ()> show databases;
+26/09/01 19:21:04 ERROR SparkSQLDriver: Failed in [show databases]
+org.apache.iceberg.exceptions.BadRequestException: Malformed request: No route for request: GET v1/my_test_prefix/namespaces
+        at org.apache.iceberg.rest.ErrorHandlers$NamespaceErrorHandler.accept(ErrorHandlers.java:276)
+        at org.apache.iceberg.rest.ErrorHandlers$NamespaceErrorHandler.accept(ErrorHandlers.java:266)
+        at org.apache.iceberg.rest.HTTPClient.throwFailure(HTTPClient.java:242)
+        at org.apache.iceberg.rest.HTTPClient.execute(HTTPClie","26/09/01 19:21:04 ERROR SparkSQLDriver: Failed in [show databases]
+org.apache.iceberg.exceptions.BadRequestException: Malformed request: No route for request: GET v1/my_test_prefix/namespaces
+at org.apache.iceberg.rest.ErrorHandlers$NamespaceErrorHandler.accept(ErrorHandlers.java:276)
+at org.apache.iceberg.rest.ErrorHandlers$NamespaceErrorHandler.accept(ErrorHandlers.java:266)
+at org.apache.iceberg.rest.HTTPClient.throwFailure(HTTPClient.java:242)","standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.Route.<init>(HTTPMethod,String,Class);standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.Route.from(HTTPMethod,String);standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.Route.matches(HTTPMethod,List);standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.Route.variables(List);standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.config();standalone-metastore/metastore-rest-catalog/src/main/java/org/apache/iceberg/rest/HMSCatalogAdapter.java::HMSCatalogAdapter.handleRequest(Route,Map,Object)","Route(HTTPMethod method, String pattern) {
+      this(method, pattern, null);
+    }",https://github.com/apache/hive/commit/5ffc2f9991deea506931de3e1f886bdf50a37279,,,,,,,,
+24,CASSANDRA-20490,post2025,CASSANDRA,https://issues.apache.org/jira/browse/CASSANDRA-20490,https://github.com/apache/cassandra/commit/6cfea18ddaa23022a919d3251f161151be81ebf0,"Encountred ""duplicate hardlink error"" when repairing","A user reported:
+
+Hi all,
+
+we experience the following issue when executing full sequential repairs in Cassandra 4.0.10.
+
+ERROR [RepairSnapshotExecutor:1] 2023-11-07 13:22:50,267 CassandraDaemon.java:581 - Exception in thread Thread[RepairSnapshotExecutor:1,5,main]
+java.lang.RuntimeException: Tried to create duplicate hard link to /opt/ddb/data/pool/data1/test_keyspace/test1-c4b33340f0a211edb0cb2fb04a4be304/snapshots/bec3dba0-7d70-11ee-99d3-7bda513c2b90/nb-1-big-Filter.db
+at org.apache.cassandra.io.util.FileUtils.createHardLink(FileUtils.java:185)
+at org.apache.cassandra.io.sstable.format.SSTableReader.createLinks(SSTableReader.java:1624)
+at org.apache.cassandra.io.sstable.format.SSTableReader.createLinks(SSTableReader.java:1606)
+at org.apache.cassandra.db.ColumnFamilyStore.snapshotWithout","ERROR [RepairSnapshotExecutor:1] 2023-11-07 13:22:50,267 CassandraDaemon.java:581 - Exception in thread Thread[RepairSnapshotExecutor:1,5,main]
+java.lang.RuntimeException: Tried to create duplicate hard link to /opt/ddb/data/pool/data1/test_keyspace/test1-c4b33340f0a211edb0cb2fb04a4be304/snapshots/bec3dba0-7d70-11ee-99d3-7bda513c2b90/nb-1-big-Filter.db
+at org.apache.cassandra.io.util.FileUtils.createHardLink(FileUtils.java:185)
+at org.apache.cassandra.io.sstable.format.SSTableReader.createLinks(SSTableReader.java:1624)
+at org.apache.cassandra.io.sstable.format.SSTableReader.createLinks(SSTableReader.java:1606)","src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java::SSTableReader.createLinks(Descriptor,Set,String);src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java::SSTableReader.createLinks(Descriptor,Set,String,RateLimiter);src/java/org/apache/cassandra/io/sstable/format/SSTableReader.java::SSTableReader.createLinks(String,RateLimiter);src/java/org/apache/cassandra/io/util/FileUtils.java::FileUtils.createHardLink(File,File);src/java/org/apache/cassandra/io/util/FileUtils.java::FileUtils.createHardLinkWithConfirm(File,File);src/java/org/apache/cassandra/service/snapshot/SnapshotDetailsTabularData.java::SnapshotDetailsTabularData.from(TableSnapshot,TabularDataSupport,Set);src/java/org/apache/cassandra/service/snapshot/SnapshotManager.java::SnapshotManager.prePopulateSnapshots(TakeSnapshotTask);src/java/org/apache/cassandra/service/snapshot/SnapshotOptions.java::SnapshotOptions.<init>(SnapshotType,String,IntSecondsBound,Instant,boolean,boolean,String[],RateLimiter,Predicate,ColumnFamilyStore);src/java/org/apache/cassandra/service/snapshot/SnapshotOptions.java::SnapshotOptions.Builder.build();src/java/org/apache/cassandra/service/snapshot/TableSnapshot.java::TableSnapshot.computeSizeOnDiskBytes();src/java/org/apache/cassandra/service/snapshot/TakeSnapshotTask.java::TakeSnapshotTask.createSnapshot(ColumnFamilyStore,TableSnapshot,String,Instant);src/java/org/apache/cassandra/service/snapshot/TakeSnapshotTask.java::TakeSnapshotTask.writeSnapshotManifest(SnapshotManifest,File)","public void createLinks(String snapshotDirectoryPath)
+    {
+        createLinks(snapshotDirectoryPath, null);
+    }",https://github.com/apache/cassandra/commit/6cfea18ddaa23022a919d3251f161151be81ebf0,,,,,,,,
+25,HBASE-30371,post2025,HBASE,https://issues.apache.org/jira/browse/HBASE-30371,https://github.com/apache/hbase/commit/8f3235fe97a2db70d1f108bf2e9f2812340c3931,Point-In-Time Restore is trying to find .backup.manifest file in the .tmp directory,"When running a Point-In-Time Restore on a continuous backup, the {{HBackupFileSystem}} class tries to get all backup images by running 
+{{{}[MASKED_METHOD](){}}}. This method iterates over the backup root directory's contents and looks for a {{.backup.manifest}} file within each subdirectory. The {{.tmp}} directory is one of these directories, and an error is getting logged since it does not contain a {{.backup.manifest}} file. Since {{.tmp}} is not a backup directory, it should be skipped over instead.
+ 
+Example error that gets logged:
+ 
+{code:java}
+2026-09-08T16:30:55,278 ERROR [main] backup.HBackupFileSystem(165): Cannot load backup manifest from: hdfs://localhost:64731/user/kgeiszler/test-data/e11d8226-5cfa-36ad-0163-65550de1bff9/backupIT/.tmp
+java.io.IOException: Could not find backup","2026-09-08T16:30:55,278 ERROR [main] backup.HBackupFileSystem(165): Cannot load backup manifest from: hdfs://localhost:64731/user/kgeiszler/test-data/e11d8226-5cfa-36ad-0163-65550de1bff9/backupIT/.tmp
+java.io.IOException: Could not find backup manifest .backup.manifest for .tmp. File hdfs://localhost:64731/user/kgeiszler/test-data/e11d8226-5cfa-36ad-0163-65550de1bff9/backupIT/.tmp/.backup.manifest does not exists. Did .tmp correspond to previously taken backup ?
+at org.apache.hadoop.hbase.backup.HBackupFileSystem.getManifestPath(HBackupFileSystem.java:126)
+at org.apache.hadoop.hbase.backup.HBackupFileSystem.getManifestPath(HBackupFileSystem.java:111)
+at org.apache.hadoop.hbase.backup.HBackupFileSystem.getManifest(HBackupFileSystem.java:143)","hbase-backup/src/main/java/org/apache/hadoop/hbase/backup/HBackupFileSystem.java::HBackupFileSystem.getAllBackupImages(Configuration,Path);hbase-backup/src/main/java/org/apache/hadoop/hbase/backup/impl/BackupManifest.java::BackupManifest.BackupImage.getAncestors();hbase-backup/src/main/java/org/apache/hadoop/hbase/backup/impl/IncrementalTableBackupClient.java::IncrementalTableBackupClient.deleteBulkLoadDirectory();hbase-backup/src/main/java/org/apache/hadoop/hbase/backup/impl/IncrementalTableBackupClient.java::IncrementalTableBackupClient.execute();hbase-backup/src/main/java/org/apache/hadoop/hbase/backup/impl/IncrementalTableBackupClient.java::IncrementalTableBackupClient.getBulkOutputDir()","public static List<BackupImage> getAllBackupImages(Configuration conf, Path backupRootPath)
+    throws IOException {
+    FileSystem fs = FileSystem.get(backupRootPath.toUri(), conf);
+    RemoteIterator<LocatedFileStatus> it = fs.listLocatedStatus(backupRootPath);
+
+    List<BackupImage> images = new ArrayList<>();
+
+    while (it.hasNext()) {
+      LocatedFileStatus lfs = it.next();
+      if (!lfs.isDirectory()) {
+        continue;
+      }
+...",https://github.com/apache/hbase/commit/8f3235fe97a2db70d1f108bf2e9f2812340c3931,,,,,,,,
+26,YARN-11753,post2025,YARN,https://issues.apache.org/jira/browse/YARN-11753,https://github.com/apache/hadoop/commit/0d72896db16841915a775db59d3044e238a3def8,NodeManager can be marked unhealthy if an application is killed,"YARN-11709 introduced a logic to mark the NM unhealthy if the container-executor has unrecoverable/config error, ie the container-executor script is missing. This however has an issue:
+
+If the application is killed just before one of the containers is trying to access the localizer syslog file an IOException can occur due to a deleted app log dir. This IOException is then catched and validated [against the file missing string|[MASKED LINK]], and then the NM will be marked unhealthy incorrectly. This check should be refined.
+
+{code:java}
+2024-12-17 10:07:38,313 INFO org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor: Deleting absolute path : /yarn/nm/usercache/hrt_qa/appcache/application_1734458673444_0002
+...
+2024-12-17 10:07:39,860 INFO org.apache.hadoop.yarn.server.nodemana","2024-12-17 10:07:38,313 INFO org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor: Deleting absolute path : /yarn/nm/usercache/hrt_qa/appcache/application_1734458673444_0002
+2024-12-17 10:07:39,860 INFO org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor: Deleting path : /yarn/container-logs/application_1734458673444_0002
+2024-12-17 10:07:45,311 WARN org.apache.hadoop.yarn.server.nodemanager.containermanager.linux.privileged.PrivilegedOperationExecutor: Shell execution returned exit code: 255. Privileged Execution Operation Stderr:
+java.io.FileNotFoundException: /yarn/container-logs/application_1734458673444_0002/container_e33_1734458673444_0002_01_000033/container-localizer-syslog (No such file or directory)
+at java.base/java.io.FileOutputStream.open0(Native Method)",hadoop-yarn-project/hadoop-yarn/hadoop-yarn-server/hadoop-yarn-server-nodemanager/src/main/java/org/apache/hadoop/yarn/server/nodemanager/LinuxContainerExecutor.java::LinuxContainerExecutor.startLocalizer(LocalizerStartContext),"@Override
+  public void startLocalizer(LocalizerStartContext ctx)
+      throws IOException, InterruptedException, ConfigurationException {
+    Path nmPrivateContainerTokensPath = ctx.getNmPrivateContainerTokens();
+    InetSocketAddress nmAddr = ctx.getNmAddr();
+    String user = ctx.getUser();
+    String appId = ctx.getAppId();
+    String locId = ctx.getLocId();
+    LocalDirsHandlerService dirsHandler = ctx.getDirsHandler();
+    List<String> localDirs = dirsHandler.getLocalDirs();
+    List<String> logDirs = dirsHandler.getLogDirs();
+
+...",https://github.com/apache/hadoop/commit/0d72896db16841915a775db59d3044e238a3def8,,,,,,,,
+27,HBASE-29188,post2025,HBASE,https://issues.apache.org/jira/browse/HBASE-29188,https://github.com/apache/hbase/commit/3823d6ef09c615fdb92d2dce4929293ad70e1ee8,Region replica replication can not handle table drop correctly,"After the rolling upgrading test, I disabled and then dropped the table, all region servers finally aborted because of
+
+{noformat}
+2025-03-15T02:16:51,266 ERROR [RS_REGION_REPLICA_FLUSH_OPS-regionserver/data01:16020-1] regionserver.HRegionServer: ***** ABORTING region server data01,16020,1742003804245: ServerAborting because an exception was thrown *****
+org.apache.hadoop.hbase.TableNotFoundException: test_ns:test_tn
+        at java.lang.Thread.getStackTrace(Thread.java:1619) ~[?:?]
+        at org.apache.hadoop.hbase.util.FutureUtils.setStackTrace(FutureUtils.java:144) ~[hbase-common-3.0.0-beta-2-SNAPSHOT.jar:3.0.0-beta-2-SNAPSHOT]
+        at org.apache.hadoop.hbase.util.FutureUtils.rethrow(FutureUtils.java:163) ~[hbase-common-3.0.0-beta-2-SNAPSHOT.jar:3.0.0-beta-2-SNAPSHOT]
+        at org","2025-03-15T02:16:51,266 ERROR [RS_REGION_REPLICA_FLUSH_OPS-regionserver/data01:16020-1] regionserver.HRegionServer: ***** ABORTING region server data01,16020,1742003804245: ServerAborting because an exception was thrown *****
+org.apache.hadoop.hbase.TableNotFoundException: test_ns:test_tn
+at java.lang.Thread.getStackTrace(Thread.java:1619) ~[?:?]
+at org.apache.hadoop.hbase.util.FutureUtils.setStackTrace(FutureUtils.java:144) ~[hbase-common-3.0.0-beta-2-SNAPSHOT.jar:3.0.0-beta-2-SNAPSHOT]
+at org.apache.hadoop.hbase.util.FutureUtils.rethrow(FutureUtils.java:163) ~[hbase-common-3.0.0-beta-2-SNAPSHOT.jar:3.0.0-beta-2-SNAPSHOT]",hbase-server/src/main/java/org/apache/hadoop/hbase/regionserver/handler/RegionReplicaFlushHandler.java::RegionReplicaFlushHandler.triggerFlushInPrimaryRegion(HRegion),"void triggerFlushInPrimaryRegion(final HRegion region) throws IOException {
+    long pause = connection.getConfiguration().getLong(HConstants.HBASE_CLIENT_PAUSE,
+      HConstants.DEFAULT_HBASE_CLIENT_PAUSE);
+
+    int maxAttempts = getRetriesCount(connection.getConfiguration());
+    RetryCounter counter = new RetryCounterFactory(maxAttempts, (int) pause).create();
+
+    if (LOG.isDebugEnabled()) {
+      LOG.debug(""RPC'ing to primary ""
+        + ServerRegionReplicaUtil.getRegionInfoForDefaultReplica(region.getRegionInfo())
+          .getRegionNameAsString()
+        + "" from "" + region.getRegionInfo().getRegionNameAsString() + "" to trigger FLUSH"");
+...",https://github.com/apache/hbase/commit/3823d6ef09c615fdb92d2dce4929293ad70e1ee8,,,,,,,,
+28,ZOOKEEPER-4907,post2025,ZOOKEEPER,https://issues.apache.org/jira/browse/ZOOKEEPER-4907,https://github.com/apache/zookeeper/commit/6e4ec270ceff046151c740783e7249d57b98e521,"Shouldn't throw ""Len error"" when server closing cause confusion","We got the error:
+ 
+{code:java}
+2024-11-07 19:03:01,414 [myid:14] - WARN [nioEventLoopGroup-7-25:NettyServerCnxn@537] - Closing connection to /135.224.186.250:47051
+
+java.io.IOException: Len error 794913900
+at org.apache.zookeeper.server.NettyServerCnxn.receiveMessage(NettyServerCnxn.java:521)
+at org.apache.zookeeper.server.NettyServerCnxn.processMessage(NettyServerCnxn.java:374)
+at org.apache.zookeeper.server.NettyServerCnxnFactory$CnxnChannelHandler.channelRead(NettyServerCnxnFactory.java:357)
+at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:379)
+at io.netty.channel.AbstractChannelHandlerContext.invokeChannelRead(AbstractChannelHandlerContext.java:365)
+at io.netty.channel.AbstractChannelHandlerContext.fireChannelRead
+ 
+{code}
+It cause","2024-11-07 19:03:01,414 [myid:14] - WARN [nioEventLoopGroup-7-25:NettyServerCnxn@537] - Closing connection to /135.224.186.250:47051
+java.io.IOException: Len error 794913900
+at org.apache.zookeeper.server.NettyServerCnxn.receiveMessage(NettyServerCnxn.java:521)
+at org.apache.zookeeper.server.NettyServerCnxn.processMessage(NettyServerCnxn.java:374)
+at org.apache.zookeeper.server.NettyServerCnxnFactory$CnxnChannelHandler.channelRead(NettyServerCnxnFactory.java:357)",zookeeper-server/src/main/java/org/apache/zookeeper/server/NettyServerCnxn.java::NettyServerCnxn.processMessage(ByteBuf),"void processMessage(ByteBuf buf) {
+        checkIsInEventLoop(""processMessage"");
+        LOG.debug(""0x{} queuedBuffer: {}"", Long.toHexString(sessionId), queuedBuffer);
+
+        if (LOG.isTraceEnabled()) {
+            LOG.trace(""0x{} buf {}"", Long.toHexString(sessionId), ByteBufUtil.hexDump(buf));
+        }
+
+        if (throttled.get()) {
+            LOG.debug(""Received message while throttled"");
+            // we are throttled, so we need to queue
+            if (queuedBuffer == null) {
+...",https://github.com/apache/zookeeper/commit/6e4ec270ceff046151c740783e7249d57b98e521,,,,,,,,
+29,HIVE-29146,post2025,HIVE,https://issues.apache.org/jira/browse/HIVE-29146,https://github.com/apache/hive/commit/ae57531ba95b8daffda89e31d6eb66e94cbd6f05,Query with WITH clause fails during split generation when CTE materaliazation is enabled,"Queries with WITH clause over transactional tables fail at runtime during split generation when the CTE materialization is enabled.
+
+The problem can be reproduced by running TPC-DS query 11 and setting the following properties.
+{code:sql}
+set hive.optimize.cte.materialize.threshold=2;
+set hive.optimize.cte.materialize.full.aggregate.only=false;
+set hive.optimize.shared.work=true;
+
+with year_total as (
+ select c_customer_id customer_id
+       ,c_first_name customer_first_name
+       ,c_last_name customer_last_name
+       ,c_preferred_cust_flag customer_preferred_cust_flag
+       ,c_birth_country customer_birth_country
+       ,c_login customer_login
+       ,c_email_address customer_email_address
+       ,d_year dyear
+       ,sum(ss_ext_list_price-ss_ext_discount_amt) year_total
+       ,'s' sa","2025-08-14T05:10:46,213 ERROR [Dispatcher thread {Central}] impl.VertexImpl: Vertex Input: date_dim initializer failed, vertex=vertex_1755173441322_0001_1_02 [Map 6]
+org.apache.tez.dag.app.dag.impl.AMUserCodeException: java.io.IOException: Acid table: default.date_dim is missing from the ValidWriteIdList config: null
+at org.apache.tez.dag.app.dag.RootInputInitializerManager$InputInitializerCallback.onFailure(RootInputInitializerManager.java:330) ~[tez-dag-0.10.5.jar:0.10.5]
+at com.google.common.util.concurrent.Futures$CallbackListener.run(Futures.java:1228) ~[guava-22.0.jar:?]
+at com.google.common.util.concurrent.MoreExecutors$DirectExecutor.execute(MoreExecutors.java:399) ~[guava-22.0.jar:?]",ql/src/java/org/apache/hadoop/hive/ql/parse/SemanticAnalyzer.java::SemanticAnalyzer.validate(),"@Override
+  public void validate() throws SemanticException {
+    boolean wasAcidChecked = false;
+    // Validate inputs and outputs have right protectmode to execute the query
+    for (ReadEntity readEntity : getInputs()) {
+      ReadEntity.Type type = readEntity.getType();
+
+      if (type != ReadEntity.Type.TABLE &&
+          type != ReadEntity.Type.PARTITION) {
+        // In current implementation it will never happen, but we leave it
+        // here to make the logic complete.
+        continue;
+...",https://github.com/apache/hive/commit/ae57531ba95b8daffda89e31d6eb66e94cbd6f05,,,,,,,,
+30,HIVE-28804,post2025,HIVE,https://issues.apache.org/jira/browse/HIVE-28804,https://github.com/apache/hive/commit/ff8e710013b941aaebfebc326e3930c80a62268e,"The user does not have the permission for the table hdfs, but can delete the metadata","When I create a table using the *hdfs* user and write data into it, and then use the *hive* user to delete this table, the engine side shows that the deletion is successful. However, the metastore log indicates that the deletion failed due to insufficient permissions when deleting the HDFS directory. Nevertheless, the metadata has been deleted. This situation may result in the data of this table becoming junk data.
+
+ 
+
+The following exception is from version 3.1.2, but I have found that it also occurs in version 4.0.1.
+
+the exception:
+{code:java}
+2025-03-04 16:44:27,617 | WARN | org.apache.hadoop.hive.metastore.utils.FileUtils | Failed to move to trash: hdfs://myns/warehouse/tablespace/managed/hive/test_drop; Force to delete it.
+2025-03-04 16:44:27,621 | ERROR | org.apache.hadoop.hive.meta","2025-03-04 16:44:27,617 | WARN | org.apache.hadoop.hive.metastore.utils.FileUtils | Failed to move to trash: hdfs://myns/warehouse/tablespace/managed/hive/test_drop; Force to delete it.
+2025-03-04 16:44:27,621 | ERROR | org.apache.hadoop.hive.metastore.utils.MetaStoreUtils | Got exception: org.apache.hadoop.security.AccessControlException Permission denied: user=hive, access=ALL, inode=""/warehouse/tablespace/managed/hive/test_drop"":hdfs:hadoop:drwxr-xr-x
+at org.apache.hadoop.hdfs.server.namenode.FSPermissionChecker.checkSubAccess(FSPermissionChecker.java:455)
+at org.apache.hadoop.hdfs.server.namenode.FSPermissionChecker.checkPermission(FSPermissionChecker.java:356)
+at org.apache.hadoop.hdfs.server.namenode.FSPermissionChecker.checkPermissionWithContext(FSPermissionChecker.java:370)","standalone-metastore/metastore-server/src/main/java/org/apache/hadoop/hive/metastore/HMSHandler.java::HMSHandler.drop_table_core(RawStore,String,String,String,boolean,EnvironmentContext,String,boolean);standalone-metastore/metastore-server/src/main/java/org/apache/hadoop/hive/metastore/HMSHandler.java::HMSHandler.init()","private boolean drop_table_core(final RawStore ms, final String catName, final String dbname,
+                                  final String name, final boolean deleteData,
+                                  final EnvironmentContext envContext, final String indexName, boolean dropPartitions)
+    throws TException, IOException {
+    boolean success = false;
+    boolean tableDataShouldBeDeleted = false;
+    Path tblPath = null;
+    List<Path> partPaths = null;
+    Table tbl = null;
+    boolean ifPurge = false;
+    Map<String, String> transactionalListenerResponses = Collections.emptyMap();
+    Database db = null;
+...",https://github.com/apache/hive/commit/ff8e710013b941aaebfebc326e3930c80a62268e,,,,,,,,
